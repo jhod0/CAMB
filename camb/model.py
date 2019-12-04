@@ -653,7 +653,7 @@ class CAMBparams(F2003Class):
 
         :param redshifts: array of redshifts to calculate
         :param kmax: maximum k to calculate (where k is just k, not k/h)
-        :param k_per_logint: number of k steps per log k. Set to zero to use default optimized spacing.
+        :param k_per_logint: minimum number of k steps per log k. Set to zero to use default optimized spacing.
         :param nonlinear: if None, uses existing setting, otherwise boolean for whether to use non-linear matter power.
         :param accurate_massive_neutrino_transfers: if you want the massive neutrino transfers accurately
         :param silent: if True, don't give warnings about sort order
