@@ -112,6 +112,8 @@
     real(dl), dimension(:,:,:), allocatable :: ddScaledSrc !temporary source second derivative array
     real(dl), dimension(:,:,:), pointer ::  ScaledSrc => null() !linear source with optional non-linear scaling
 
+    integer n_source_points ! number of CL source wavenumbers (for use when calculted remaining non-CL transfers)
+    
     procedure(obj_function), private :: dtauda
 
     public cmbmain, ClTransferToCl, InitVars, GetTauStart !InitVars for BAO hack
@@ -648,6 +650,8 @@
     if (CP%WantCls) then
         ntodo = MT%num_q_trans
         first_i = ntodo+1
+        n_source_points = ThisSources%Evolve_q%npoints
+
         do q_ix = 1,ntodo
             if (q_transfer(q_ix) > ThisSources%Evolve_q%highest+1d-4) then
                 !Feb13 fix for case with closed universe where qmax is not neccessarily right quantized value
@@ -664,12 +668,12 @@
         end if
         call Transfer_Allocate(MT,State)
 
-        MT%q_trans(1:ThisSources%Evolve_q%npoints) = ThisSources%Evolve_q%points(1:ThisSources%Evolve_q%npoints)
-        if (MT%num_q_trans > ThisSources%Evolve_q%npoints) then
-            MT%q_trans(ThisSources%Evolve_q%npoints+1:MT%num_q_trans) = q_transfer(first_i:ntodo)
+        MT%q_trans(1:n_source_points) = ThisSources%Evolve_q%points(1:n_source_points)
+        if (MT%num_q_trans > n_source_points) then
+            MT%q_trans(n_source_points+1:MT%num_q_trans) = q_transfer(first_i:ntodo)
         end if
     else
-        ThisSources%Evolve_q%npoints = 0
+        n_source_points = 0
         call Transfer_Allocate(MT,State)
         MT%q_trans = q_transfer(1:MT%num_q_trans)
     end if
@@ -1097,11 +1101,11 @@
 
 
     if (DebugMsgs .and. Feedbacklevel > 0) &
-        call WriteFormat('Transfer k values: %f',State%MT%num_q_trans-ThisSources%Evolve_q%npoints)
+        call WriteFormat('Transfer k values: %f',State%MT%num_q_trans-n_source_points)
 
     !     loop over wavenumbers.
     !$OMP PARALLEL DO DEFAULT(SHARED),SCHEDULE(DYNAMIC), PRIVATE(EV, tau, q_ix)
-    do q_ix=State%MT%num_q_trans, ThisSources%Evolve_q%npoints+1, -1
+    do q_ix=State%MT%num_q_trans, n_source_points+1, -1
         EV%TransferOnly=.true. !in case we want to do something to speed it up
 
         EV%q= State%MT%q_trans(q_ix)
