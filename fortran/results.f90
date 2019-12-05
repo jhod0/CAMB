@@ -154,7 +154,7 @@
         ! values of q to evolve the propagation equations to compute the sources
         type(TRanges) :: Evolve_q
         real(dl), dimension(:,:,:), allocatable :: LinearSrc !Sources and second derivs
-        ! indices  Src( k_index, source_index, time_step_index )
+        !LinearSrc indices  ( k_index, source_index, time_step_index )
         integer SourceNum, NonCustomSourceNum
         !SourceNum is total number sources (2 or 3 for scalars, 3 for tensors).
     end type TTimeSources

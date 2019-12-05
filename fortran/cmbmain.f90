@@ -105,12 +105,12 @@
     integer :: max_bessels_l_index  = 1000000
     real(dl) :: max_bessels_etak = 1000000*2
 
-    Type(ClTransferData), pointer :: ThisCT
-    Type(TTimeSources) , pointer :: ThisSources
+    Type(ClTransferData), pointer :: ThisCT => null()
+    Type(TTimeSources) , pointer :: ThisSources => null()
     Type(TTimeSources), allocatable, target :: TempSources
 
     real(dl), dimension(:,:,:), allocatable :: ddScaledSrc !temporary source second derivative array
-    real(dl), dimension(:,:,:), pointer ::  ScaledSrc !linear source with optional non-linear scaling
+    real(dl), dimension(:,:,:), pointer ::  ScaledSrc => null() !linear source with optional non-linear scaling
 
     procedure(obj_function), private :: dtauda
 
@@ -219,6 +219,7 @@
         else
             deallocate(TempSources)
         end if
+        nullify(ThisSources)
     end if
 
     if (DebugMsgs .and. Feedbacklevel > 0) then
@@ -272,8 +273,10 @@
         end if
 
         if (allocated(ddScaledSrc)) deallocate(ddScaledSrc)
-        if (associated(ScaledSrc) .and. .not. associated(ScaledSrc,ThisSources%LinearSrc)) &
+        if (associated(ScaledSrc) .and. .not. associated(ScaledSrc,ThisSources%LinearSrc)) then
             deallocate(ScaledSrc)
+            nullify(ScaledSrc)
+        end if
 
         !Final calculations for CMB output unless want the Cl transfer functions only.
         if (.not. State%OnlyTransfer .and. global_error_flag==0) &
