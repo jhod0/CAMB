@@ -176,7 +176,8 @@ class CAMBdata(F2003Class):
                  "Number of calculated redshift outputs for the matter transfer (including those for CMB lensing)"),
                 ("transfer_redshifts", AllocatableArrayDouble, "Calculated output redshifts"),
                 ("PK_redshifts_index", c_int * model.max_transfer_redshifts, "Indices of the requested PK_redshifts"),
-                ("OnlyTransfers", c_bool, "Only calculating transfer functions, not power spectra")]
+                ("OnlyTransfers", c_bool, "Only calculating transfer functions, not power spectra"),
+                ("HasScalarTimeSources", c_bool, "calculate and save time source functions, not power spectra")]
 
     # Note there are many more fields in Fortran. Since F2003Class is memory-managed by Fortran, we don't need
     # need to define them all in python.
@@ -281,19 +282,22 @@ class CAMBdata(F2003Class):
         if CAMBdata_CalcBackgroundTheory(byref(self), byref(params)):
             config.check_global_error('calc_background')
 
-    def calc_transfers(self, params, only_transfers=True):
+    def calc_transfers(self, params, only_transfers=True, only_time_sources=False):
         """
         Calculate the transfer functions (for CMB and matter power, as determined
         by params.WantCls, params.WantTransfer).
 
         :param params: :class:`~.model.CAMBparams` instance with parameters to use
         :param only_transfers: only calculate transfer functions, no power spectra
+        :param only_time_sources: only calculate time transfer functions, no (p,l,k) transfer functions or non-
+                                  linear scaling
         :return: non-zero if error, zero if OK
         """
         self._check_params(params)
-        if not only_transfers:
+        if not (only_transfers or only_time_sources):
             self._check_powers(params)
-        if CAMBdata_gettransfers(byref(self), byref(params), byref(c_int(1 if only_transfers else 0))):
+        if CAMBdata_gettransfers(byref(self), byref(params), byref(c_int(1 if only_transfers else 0)),
+                                 byref(c_int(1 if only_time_sources else 0))):
             config.check_global_error('calc_transfer')
 
     def _check_powers(self, params=None):
@@ -331,7 +335,8 @@ class CAMBdata(F2003Class):
                instance with new primordial power spectrum parameters
         :param silent: suppress warnings about non-linear corrections not being recalculated
         """
-        if not silent and self.Params.NonLinear in [model.NonLinear_lens, model.NonLinear_both] and \
+        if not silent and not self.HasScalarTimeSources and \
+                self.Params.NonLinear in [model.NonLinear_lens, model.NonLinear_both] and \
                 self.Params.WantScalars and self.Params.WantCls and not getattr(self, '_suppress_power_warn', False):
             logging.warning(
                 'power_spectra_from_transfer with non-linear lensing does not recalculate the non-linear correction')
@@ -1428,7 +1433,7 @@ class CAMBdata(F2003Class):
 
 CAMBdata_gettransfers = camblib.__handles_MOD_cambdata_gettransfers
 CAMBdata_gettransfers.argtypes = [POINTER(CAMBdata), POINTER(model.CAMBparams),
-                                  POINTER(c_int)]
+                                  POINTER(c_int), POINTER(c_int)]
 CAMBdata_gettransfers.restype = c_int
 
 CAMBdata_transferstopowers = camblib.__camb_MOD_camb_transferstopowers

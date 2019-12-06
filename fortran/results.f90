@@ -194,6 +194,7 @@
 
         logical :: OnlyTransfer = .false. !C_L/PK not computed; initial power spectrum data, instead get Delta_q_l array
         !If true, sigma_8 is not calculated either]]
+        logical :: HasScalarTimeSources = .false. !No power spectra, only time transfer functions
 
         logical :: get_growth_sigma8 = .true.
         !gets sigma_vdelta, like sigma8 but using velocity-density cross power,

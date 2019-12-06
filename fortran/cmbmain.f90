@@ -113,10 +113,10 @@
     real(dl), dimension(:,:,:), pointer ::  ScaledSrc => null() !linear source with optional non-linear scaling
 
     integer n_source_points ! number of CL source wavenumbers (for use when calculted remaining non-CL transfers)
-    
+
     procedure(obj_function), private :: dtauda
 
-    public cmbmain, ClTransferToCl, InitVars, GetTauStart !InitVars for BAO hack
+    public cmbmain, TimeSourcesToCl, ClTransferToCl, InitVars, GetTauStart !InitVars for BAO hack
 
     contains
 
@@ -152,7 +152,8 @@
         if (.not. State%flat) call WriteFormat('r = %f, scale = %f',State%curvature_radius, State%scale)
     end if
 
-    if (.not. State%OnlyTransfer .or. CP%NonLinear==NonLinear_Lens .or. CP%NonLinear==NonLinear_both) &
+    if (.not. State%HasScalarTimeSources .and. (.not. State%OnlyTransfer .or. &
+        CP%NonLinear==NonLinear_Lens .or. CP%NonLinear==NonLinear_both)) &
         call CP%InitPower%Init(CP)
     if (global_error_flag/=0) return
 
@@ -214,8 +215,9 @@
     !     if CMB calculations are requested, calculate the Cl by
     !     integrating the sources over time and over k.
 
-    if (CP%WantCls) then
+    if (CP%WantCls .and. (.not. CP%WantScalars .or. .not. State%HasScalarTimeSources)) then
         call TimeSourcesToCl
+
         if (CP%WantScalars) then
             deallocate(State%ScalarTimeSources)
         else
@@ -223,7 +225,6 @@
         end if
         nullify(ThisSources)
     end if
-
     if (DebugMsgs .and. Feedbacklevel > 0) then
         call Timer%WriteTime('Timing for whole of cmbmain', starttime)
     end if
@@ -234,59 +235,58 @@
     Type(TTimer) :: Timer
     integer q_ix
 
-    if (CP%WantCls) then
-        if (DebugMsgs .and. Feedbacklevel > 0) call Timer%Start()
+    if (CP%WantScalars) ThisSources => State%ScalarTimeSources
 
-        if (CP%WantTransfer .and. WantLateTime &
-            .and. (CP%NonLinear==NonLinear_Lens .or. CP%NonLinear==NonLinear_both) .and. global_error_flag==0) then
-            call MakeNonlinearSources
-            if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for NonLinear sources')
-        else
-            ScaledSrc => ThisSources%LinearSrc
-        end if
+    if (DebugMsgs .and. Feedbacklevel > 0) call Timer%Start()
 
-        if (global_error_flag==0) then
-            call InitSourceInterpolation
-
-            ExactClosedSum = State%curv > 5e-9_dl .or. State%scale < 0.93_dl
-
-            max_bessels_l_index = ThisCT%ls%nl
-            max_bessels_etak  = maximum_qeta
-
-            if (CP%WantScalars) call GetLimberTransfers
-            ThisCT%max_index_nonlimber = max_bessels_l_index
-
-            if (State%flat) call InitSpherBessels(ThisCT%ls, CP, max_bessels_l_index,max_bessels_etak )
-            !This is only slow if not called before with same (or higher) Max_l, Max_eta_k
-            !Preferably stick to Max_l being a multiple of 50
-
-            call SetkValuesForInt
-
-            if (DebugMsgs .and. Feedbacklevel > 0) call WriteFormat('Set %d integration k values',ThisCT%q%npoints)
-
-            !Begin k-loop and integrate Sources*Bessels over time
-            !$OMP PARALLEL DO DEFAULT(SHARED), SCHEDULE(STATIC,4)
-            do q_ix=1,ThisCT%q%npoints
-                call SourceToTransfers(q_ix)
-            end do !q loop
-            !$OMP END PARALLEL DO
-
-            if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for Integration')
-        end if
-
-        if (allocated(ddScaledSrc)) deallocate(ddScaledSrc)
-        if (associated(ScaledSrc) .and. .not. associated(ScaledSrc,ThisSources%LinearSrc)) then
-            deallocate(ScaledSrc)
-            nullify(ScaledSrc)
-        end if
-
-        !Final calculations for CMB output unless want the Cl transfer functions only.
-        if (.not. State%OnlyTransfer .and. global_error_flag==0) &
-            call ClTransferToCl(State)
-
-        if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for final CL output')
-
+    if (CP%WantScalars .and. WantLateTime &
+        .and. (CP%NonLinear==NonLinear_Lens .or. CP%NonLinear==NonLinear_both) .and. global_error_flag==0) then
+        call MakeNonlinearSources
+        if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for NonLinear sources')
+    else
+        ScaledSrc => ThisSources%LinearSrc
     end if
+
+    if (global_error_flag==0) then
+        call InitSourceInterpolation
+
+        ExactClosedSum = State%curv > 5e-9_dl .or. State%scale < 0.93_dl
+
+        max_bessels_l_index = ThisCT%ls%nl
+        max_bessels_etak  = maximum_qeta
+
+        if (CP%WantScalars) call GetLimberTransfers
+        ThisCT%max_index_nonlimber = max_bessels_l_index
+
+        if (State%flat) call InitSpherBessels(ThisCT%ls, CP, max_bessels_l_index,max_bessels_etak )
+        !This is only slow if not called before with same (or higher) Max_l, Max_eta_k
+        !Preferably stick to Max_l being a multiple of 50
+
+        call SetkValuesForInt
+
+        if (DebugMsgs .and. Feedbacklevel > 0) call WriteFormat('Set %d integration k values',ThisCT%q%npoints)
+
+        !Begin k-loop and integrate Sources*Bessels over time
+        !$OMP PARALLEL DO DEFAULT(SHARED), SCHEDULE(STATIC,4)
+        do q_ix=1,ThisCT%q%npoints
+            call SourceToTransfers(q_ix)
+        end do !q loop
+        !$OMP END PARALLEL DO
+
+        if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for Integration')
+    end if
+
+    if (allocated(ddScaledSrc)) deallocate(ddScaledSrc)
+    if (associated(ScaledSrc) .and. .not. associated(ScaledSrc,ThisSources%LinearSrc)) then
+        deallocate(ScaledSrc)
+        nullify(ScaledSrc)
+    end if
+
+    !Final calculations for CMB output unless want the Cl transfer functions only.
+    if (.not. State%OnlyTransfer .and. global_error_flag==0) &
+        call ClTransferToCl(State)
+
+    if (DebugMsgs .and. Feedbacklevel > 0) call Timer%WriteTime('Timing for final CL output')
 
     end subroutine TimeSourcesToCl
 
