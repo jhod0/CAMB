@@ -322,7 +322,7 @@ class CAMBdata(F2003Class):
             CAMBdata_transferstopowers(byref(self))
             config.check_global_error()
 
-    def power_spectra_from_transfer(self, initial_power_params, silent=False):
+    def power_spectra_from_transfer(self, initial_power_params=None, silent=False):
         """
         Assuming :meth:`calc_transfers` or :meth:`calc_power_spectra` have already been used, re-calculate the
         power spectra using a new set of initial power spectrum parameters with otherwise the same cosmology.
@@ -332,7 +332,7 @@ class CAMBdata(F2003Class):
         same results as doing a full recalculation.
 
         :param initial_power_params: :class:`.initialpower.InitialPowerLaw` or :class:`.initialpower.SplinedInitialPower`
-               instance with new primordial power spectrum parameters
+               instance with new primordial power spectrum parameters, or None to use current power spectrum.
         :param silent: suppress warnings about non-linear corrections not being recalculated
         """
         if not silent and not self.HasScalarTimeSources and \
@@ -341,7 +341,8 @@ class CAMBdata(F2003Class):
             logging.warning(
                 'power_spectra_from_transfer with non-linear lensing does not recalculate the non-linear correction')
             self._suppress_power_warn = True
-        self.Params.set_initial_power(initial_power_params)
+        if initial_power_params:
+            self.Params.set_initial_power(initial_power_params)
         self._check_powers()
         CAMBdata_transferstopowers(byref(self))
         config.check_global_error()
